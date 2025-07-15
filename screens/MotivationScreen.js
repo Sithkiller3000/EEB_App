@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Animated,
-  Alert 
+  Alert,
+  ScrollView  // Added ScrollView import
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import WeightWebSocket from '../services/WeightWebSocket';
@@ -26,7 +27,7 @@ export default function MotivationScreen() {
   const [handFrontWeight, setHandFrontWeight] = useState(0); // drucksensoren.sensor2
   const [handBackWeight, setHandBackWeight] = useState(0);   // drucksensoren.sensor3
   
-  // Thresholds
+  // Thresholds - changed increment to 0.1
   const [weightThreshold, setWeightThreshold] = useState(0.05); // Grenzwert für Drucksensoren
   
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -263,147 +264,181 @@ export default function MotivationScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {/* Connection Status */}
-        <View style={[styles.statusCard, { backgroundColor: `${getConnectionColor()}20` }]}>
-          <Ionicons 
-            name={getConnectionIcon()} 
-            size={20} 
-            color={getConnectionColor()} 
-          />
-          <Text style={[styles.statusText, { color: getConnectionColor() }]}>
-            Sensoren: {connectionStatus}
-          </Text>
-          {!isConnected && (
-            <TouchableOpacity 
-              style={styles.reconnectButton}
-              onPress={initializeWebSocket}
-            >
-              <Text style={styles.reconnectText}>Neu verbinden</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          {/* Connection Status */}
+          <View style={[styles.statusCard, { backgroundColor: `${getConnectionColor()}20` }]}>
+            <Ionicons 
+              name={getConnectionIcon()} 
+              size={20} 
+              color={getConnectionColor()} 
+            />
+            <Text style={[styles.statusText, { color: getConnectionColor() }]}>
+              Sensoren: {connectionStatus}
+            </Text>
+            {!isConnected && (
+              <TouchableOpacity 
+                style={styles.reconnectButton}
+                onPress={initializeWebSocket}
+              >
+                <Text style={styles.reconnectText}>Neu verbinden</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-        {/* Weight Scales Display */}
-        <View style={styles.scalesCard}>
-          <Text style={styles.scalesTitle}>Gewichts-Waagen</Text>
-          <View style={styles.scalesRow}>
-            <View style={styles.scaleItem}>
-              <Text style={styles.scaleLabel}>Waage 1</Text>
-              <Text style={styles.scaleValue}>{waage1.toFixed(1)} kg</Text>
-            </View>
-            <View style={styles.scaleItem}>
-              <Text style={styles.scaleLabel}>Waage 2</Text>
-              <Text style={styles.scaleValue}>{waage2.toFixed(1)} kg</Text>
+          {/* Weight Scales Display */}
+          <View style={styles.scalesCard}>
+            <Text style={styles.scalesTitle}>Gewichts-Waagen</Text>
+            <View style={styles.scalesRow}>
+              <View style={styles.scaleItem}>
+                <Text style={styles.scaleLabel}>Waage 1</Text>
+                <Text style={styles.scaleValue}>{waage1.toFixed(1)} kg</Text>
+              </View>
+              <View style={styles.scaleItem}>
+                <Text style={styles.scaleLabel}>Waage 2</Text>
+                <Text style={styles.scaleValue}>{waage2.toFixed(1)} kg</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* Hand Pressure Sensors Display */}
-        <View style={styles.sensorsCard}>
-          <Text style={styles.sensorsTitle}>Hand-Drucksensoren</Text>
-          <View style={styles.sensorsGrid}>
-            <View style={styles.sensorItem}>
-              <Text style={styles.sensorLabel}>Oben</Text>
-              <Text style={[styles.sensorValue, { color: getSensorColor(handTopWeight) }]}>
-                {handTopWeight.toFixed(3)}
-              </Text>
+          {/* Hand Pressure Sensors Display */}
+          <View style={styles.sensorsCard}>
+            <Text style={styles.sensorsTitle}>Hand-Drucksensoren</Text>
+            <View style={styles.sensorsGrid}>
+              <View style={styles.sensorItem}>
+                <Text style={styles.sensorLabel}>Oben</Text>
+                <Text style={[styles.sensorValue, { color: getSensorColor(handTopWeight) }]}>
+                  {handTopWeight.toFixed(3)}
+                </Text>
+              </View>
+              <View style={styles.sensorItem}>
+                <Text style={styles.sensorLabel}>Vorne</Text>
+                <Text style={[styles.sensorValue, { color: getSensorColor(handFrontWeight) }]}>
+                  {handFrontWeight.toFixed(3)}
+                </Text>
+              </View>
+              <View style={styles.sensorItem}>
+                <Text style={styles.sensorLabel}>Hinten</Text>
+                <Text style={[styles.sensorValue, { color: getSensorColor(handBackWeight) }]}>
+                  {handBackWeight.toFixed(3)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.sensorItem}>
-              <Text style={styles.sensorLabel}>Vorne</Text>
-              <Text style={[styles.sensorValue, { color: getSensorColor(handFrontWeight) }]}>
-                {handFrontWeight.toFixed(3)}
-              </Text>
-            </View>
-            <View style={styles.sensorItem}>
-              <Text style={styles.sensorLabel}>Hinten</Text>
-              <Text style={[styles.sensorValue, { color: getSensorColor(handBackWeight) }]}>
-                {handBackWeight.toFixed(3)}
-              </Text>
+            <Text style={[styles.overallStatus, { color: overallStatus.color }]}>
+              {overallStatus.text}
+            </Text>
+          </View>
+
+          {/* Threshold Setting - Changed to 0.1 increments */}
+          <View style={styles.thresholdCard}>
+            <Text style={styles.thresholdTitle}>Druckgrenzwert</Text>
+            <View style={styles.thresholdControls}>
+              <TouchableOpacity 
+                style={styles.thresholdButton}
+                onPress={() => setWeightThreshold(Math.max(0.1, weightThreshold - 0.1))}
+              >
+                <Ionicons name="remove" size={20} color="#4A90E2" />
+              </TouchableOpacity>
+              <Text style={styles.thresholdValue}>{weightThreshold.toFixed(1)}</Text>
+              <TouchableOpacity 
+                style={styles.thresholdButton}
+                onPress={() => setWeightThreshold(weightThreshold + 0.1)}
+              >
+                <Ionicons name="add" size={20} color="#4A90E2" />
+              </TouchableOpacity>
             </View>
           </View>
-          <Text style={[styles.overallStatus, { color: overallStatus.color }]}>
-            {overallStatus.text}
-          </Text>
-        </View>
 
-        {/* Threshold Setting */}
-        <View style={styles.thresholdCard}>
-          <Text style={styles.thresholdTitle}>Druckgrenzwert</Text>
-          <View style={styles.thresholdControls}>
-            <TouchableOpacity 
-              style={styles.thresholdButton}
-              onPress={() => setWeightThreshold(Math.max(0.01, weightThreshold - 0.01))}
-            >
-              <Ionicons name="remove" size={20} color="#4A90E2" />
-            </TouchableOpacity>
-            <Text style={styles.thresholdValue}>{weightThreshold.toFixed(3)}</Text>
-            <TouchableOpacity 
-              style={styles.thresholdButton}
-              onPress={() => setWeightThreshold(weightThreshold + 0.01)}
-            >
-              <Ionicons name="add" size={20} color="#4A90E2" />
+          {/* Exercise Timer */}
+          <View style={styles.exerciseCard}>
+            <Text style={styles.exerciseTitle}>Übungszeit</Text>
+            <View style={styles.timerContainer}>
+              <Ionicons name="time" size={24} color="#4A90E2" />
+              <Text style={styles.timerText}>{formatTime(timer)}</Text>
+            </View>
+          </View>
+
+          {/* Motivation Area */}
+          <Animated.View style={[styles.motivationCard, { transform: [{ scale: pulseAnim }] }]}>
+            <Ionicons name="heart" size={32} color="#E74C3C" />
+            <Text style={styles.motivationText}>{motivationMessage}</Text>
+          </Animated.View>
+
+          {/* Control Buttons */}
+          <View style={styles.controlsContainer}>
+            {!isExercising ? (
+              <TouchableOpacity 
+                style={[styles.startButton, !isConnected && styles.disabledButton]} 
+                onPress={startExercise}
+                disabled={!isConnected}
+              >
+                <Ionicons name="play" size={24} color="white" />
+                <Text style={styles.buttonText}>Übung starten</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.stopButton} onPress={stopExercise}>
+                <Ionicons name="stop" size={24} color="white" />
+                <Text style={styles.buttonText}>Session beenden</Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity style={styles.tareButton} onPress={tareScale}>
+              <Ionicons name="refresh" size={20} color="#666" />
+              <Text style={styles.tareButtonText}>Sensoren nullen</Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Exercise Timer */}
-        <View style={styles.exerciseCard}>
-          <Text style={styles.exerciseTitle}>Übungszeit</Text>
-          <View style={styles.timerContainer}>
-            <Ionicons name="time" size={24} color="#4A90E2" />
-            <Text style={styles.timerText}>{formatTime(timer)}</Text>
+          {/* Exercise Tips */}
+          <View style={styles.tipsCard}>
+            <Text style={styles.tipsTitle}>💡 Übungstipps</Text>
+            <Text style={styles.tipText}>• Greife den Griff locker, nicht verkrampft</Text>
+            <Text style={styles.tipText}>• Die Kraft soll aus den Beinen kommen</Text>
+            <Text style={styles.tipText}>• Vermeide das Hochziehen mit der Hand</Text>
+            <Text style={styles.tipText}>• Hand nur zur Führung nutzen</Text>
+            <Text style={styles.tipText}>• Bei Schmerzen sofort aufhören</Text>
           </View>
         </View>
-
-        {/* Motivation Area */}
-        <Animated.View style={[styles.motivationCard, { transform: [{ scale: pulseAnim }] }]}>
-          <Ionicons name="heart" size={32} color="#E74C3C" />
-          <Text style={styles.motivationText}>{motivationMessage}</Text>
-        </Animated.View>
-
-        {/* Control Buttons */}
-        <View style={styles.controlsContainer}>
-          {!isExercising ? (
-            <TouchableOpacity 
-              style={[styles.startButton, !isConnected && styles.disabledButton]} 
-              onPress={startExercise}
-              disabled={!isConnected}
-            >
-              <Ionicons name="play" size={24} color="white" />
-              <Text style={styles.buttonText}>Übung starten</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.stopButton} onPress={stopExercise}>
-              <Ionicons name="stop" size={24} color="white" />
-              <Text style={styles.buttonText}>Session beenden</Text>
-            </TouchableOpacity>
-          )}
-          
-          <TouchableOpacity style={styles.tareButton} onPress={tareScale}>
-            <Ionicons name="refresh" size={20} color="#666" />
-            <Text style={styles.tareButtonText}>Sensoren nullen</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Exercise Tips */}
-        <View style={styles.tipsCard}>
-          <Text style={styles.tipsTitle}>💡 Übungstipps</Text>
-          <Text style={styles.tipText}>• Greife den Griff locker, nicht verkrampft</Text>
-          <Text style={styles.tipText}>• Die Kraft soll aus den Beinen kommen</Text>
-          <Text style={styles.tipText}>• Vermeide das Hochziehen mit der Hand</Text>
-          <Text style={styles.tipText}>• Hand nur zur Führung nutzen</Text>
-          <Text style={styles.tipText}>• Bei Schmerzen sofort aufhören</Text>
-        </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-// Styles remain the same as before, but add these new ones:
 const styles = StyleSheet.create({
-  // ... (all previous styles remain the same)
-  
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 32, // Extra padding at bottom for better scrolling
+  },
+  statusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  statusText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  reconnectButton: {
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  reconnectText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+  },
   scalesCard: {
     backgroundColor: 'white',
     padding: 20,
@@ -438,40 +473,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#4A90E2',
-  },
-  
-  // ... (rest of the styles from the previous implementation)
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  statusCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  statusText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
-  },
-  reconnectButton: {
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  reconnectText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '600',
   },
   sensorsCard: {
     backgroundColor: 'white',
@@ -547,7 +548,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#4A90E2',
-    minWidth: 80,
+    minWidth: 60,
     textAlign: 'center',
   },
   exerciseCard: {
@@ -640,6 +641,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 16,
     borderRadius: 12,
+    marginBottom: 16, // Added margin for better spacing at bottom
   },
   tipsTitle: {
     fontSize: 16,
