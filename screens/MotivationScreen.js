@@ -7,7 +7,7 @@ import {
   SafeAreaView,
   Animated,
   Alert,
-  ScrollView  // Added ScrollView import
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import WeightWebSocket from '../services/WeightWebSocket';
@@ -27,8 +27,11 @@ export default function MotivationScreen() {
   const [handFrontWeight, setHandFrontWeight] = useState(0); // drucksensoren.sensor2
   const [handBackWeight, setHandBackWeight] = useState(0);   // drucksensoren.sensor3
   
-  // Thresholds - changed increment to 0.1
-  const [weightThreshold, setWeightThreshold] = useState(0.05); // Grenzwert für Drucksensoren
+  // Thresholds - Erhöht auf 1.0 mit Minimum 1.0
+  const [weightThreshold, setWeightThreshold] = useState(1.0);
+  
+  // Faktor für Zug-Erkennung
+  const pullUpFactor = 1.5;
   
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef(null);
@@ -59,6 +62,9 @@ export default function MotivationScreen() {
     "Durchhalten! Weniger Hand, mehr Beine!",
     "Fast geschafft! Hand locker lassen!"
   ];
+
+  // Rauschfilterung - Werte unter 1.0 als 0 anzeigen
+  const filterSensorValue = (value) => value >= 1.0 ? value : 0;
 
   useEffect(() => {
     initializeWebSocket();
@@ -99,16 +105,26 @@ export default function MotivationScreen() {
   }, [isExercising, handTopWeight, handFrontWeight, handBackWeight]);
 
   const updateMotivationMessage = (currentTimer) => {
-    // Logic: Hand_oben > Hand_vorne && Hand_hinten -> warning about pulling up
-    if (handTopWeight > handFrontWeight && handTopWeight > handBackWeight) {
+    // Gefilterte Werte verwenden
+    const filteredTop = filterSensorValue(handTopWeight);
+    const filteredFront = filterSensorValue(handFrontWeight);
+    const filteredBack = filterSensorValue(handBackWeight);
+    
+    // Verbesserte Zug-Logik: Alle Sensoren > Grenzwert UND Top > Faktor * (Front/Back)
+    if (filteredTop > weightThreshold && 
+        filteredFront > weightThreshold && 
+        filteredBack > weightThreshold &&
+        filteredTop > (pullUpFactor * filteredFront) && 
+        filteredTop > (pullUpFactor * filteredBack)) {
+      
       const randomWarning = pullUpWarningMessages[
         Math.floor(Math.random() * pullUpWarningMessages.length)
       ];
       setMotivationMessage(randomWarning);
     }
     // Logic: All sensors above threshold -> encouragement with time remaining
-    else if (handTopWeight > weightThreshold && handFrontWeight > weightThreshold && handBackWeight > weightThreshold) {
-      const remainingSeconds = Math.max(0, 60 - (currentTimer % 60)); // Example: 60 second intervals
+    else if (filteredTop > weightThreshold && filteredFront > weightThreshold && filteredBack > weightThreshold) {
+      const remainingSeconds = Math.max(0, 60 - (currentTimer % 60));
       const randomEncouragement = encouragementMessages[
         Math.floor(Math.random() * encouragementMessages.length)
       ].replace('{seconds}', remainingSeconds.toString());
@@ -245,16 +261,26 @@ export default function MotivationScreen() {
   };
 
   const getSensorColor = (weight) => {
-    if (weight > weightThreshold) return '#E74C3C'; // Red for high force
-    if (weight > weightThreshold * 0.5) return '#FF9800'; // Orange for medium force
+    const filtered = filterSensorValue(weight);
+    if (filtered > weightThreshold) return '#E74C3C'; // Red for high force
+    if (filtered > weightThreshold * 0.5) return '#FF9800'; // Orange for medium force
     return '#4CAF50'; // Green for low force
   };
 
   const getOverallStatus = () => {
-    if (handTopWeight > handFrontWeight && handTopWeight > handBackWeight) {
+    const filteredTop = filterSensorValue(handTopWeight);
+    const filteredFront = filterSensorValue(handFrontWeight);
+    const filteredBack = filterSensorValue(handBackWeight);
+    
+    // Verbesserte Zug-Erkennung
+    if (filteredTop > weightThreshold && 
+        filteredFront > weightThreshold && 
+        filteredBack > weightThreshold &&
+        filteredTop > (pullUpFactor * filteredFront) && 
+        filteredTop > (pullUpFactor * filteredBack)) {
       return { color: '#E74C3C', text: '⚠ Zu viel Zug nach oben!' };
     }
-    if (handTopWeight > weightThreshold && handFrontWeight > weightThreshold && handBackWeight > weightThreshold) {
+    if (filteredTop > weightThreshold && filteredFront > weightThreshold && filteredBack > weightThreshold) {
       return { color: '#FF9800', text: '💪 Hohe Belastung - entspannen!' };
     }
     return { color: '#4CAF50', text: '✓ Optimale Handhaltung' };
@@ -301,26 +327,26 @@ export default function MotivationScreen() {
             </View>
           </View>
 
-          {/* Hand Pressure Sensors Display */}
+          {/* Hand Pressure Sensors Display - Mit Filterung */}
           <View style={styles.sensorsCard}>
             <Text style={styles.sensorsTitle}>Hand-Drucksensoren</Text>
             <View style={styles.sensorsGrid}>
               <View style={styles.sensorItem}>
                 <Text style={styles.sensorLabel}>Oben</Text>
                 <Text style={[styles.sensorValue, { color: getSensorColor(handTopWeight) }]}>
-                  {handTopWeight.toFixed(3)}
+                  {filterSensorValue(handTopWeight).toFixed(3)}
                 </Text>
               </View>
               <View style={styles.sensorItem}>
                 <Text style={styles.sensorLabel}>Vorne</Text>
                 <Text style={[styles.sensorValue, { color: getSensorColor(handFrontWeight) }]}>
-                  {handFrontWeight.toFixed(3)}
+                  {filterSensorValue(handFrontWeight).toFixed(3)}
                 </Text>
               </View>
               <View style={styles.sensorItem}>
                 <Text style={styles.sensorLabel}>Hinten</Text>
                 <Text style={[styles.sensorValue, { color: getSensorColor(handBackWeight) }]}>
-                  {handBackWeight.toFixed(3)}
+                  {filterSensorValue(handBackWeight).toFixed(3)}
                 </Text>
               </View>
             </View>
@@ -329,13 +355,13 @@ export default function MotivationScreen() {
             </Text>
           </View>
 
-          {/* Threshold Setting - Changed to 0.1 increments */}
+          {/* Threshold Setting - Minimum 1.0, Schritte 0.1 */}
           <View style={styles.thresholdCard}>
             <Text style={styles.thresholdTitle}>Druckgrenzwert</Text>
             <View style={styles.thresholdControls}>
               <TouchableOpacity 
                 style={styles.thresholdButton}
-                onPress={() => setWeightThreshold(Math.max(0.1, weightThreshold - 0.1))}
+                onPress={() => setWeightThreshold(Math.max(1.0, weightThreshold - 0.1))}
               >
                 <Ionicons name="remove" size={20} color="#4A90E2" />
               </TouchableOpacity>
@@ -347,6 +373,9 @@ export default function MotivationScreen() {
                 <Ionicons name="add" size={20} color="#4A90E2" />
               </TouchableOpacity>
             </View>
+            <Text style={styles.thresholdInfo}>
+              Zug-Faktor: {pullUpFactor}x | Minimum: 1.0
+            </Text>
           </View>
 
           {/* Exercise Timer */}
@@ -395,6 +424,7 @@ export default function MotivationScreen() {
             <Text style={styles.tipText}>• Die Kraft soll aus den Beinen kommen</Text>
             <Text style={styles.tipText}>• Vermeide das Hochziehen mit der Hand</Text>
             <Text style={styles.tipText}>• Hand nur zur Führung nutzen</Text>
+            <Text style={styles.tipText}>• Werte unter 1.0 werden als Rauschen gefiltert</Text>
             <Text style={styles.tipText}>• Bei Schmerzen sofort aufhören</Text>
           </View>
         </View>
@@ -413,7 +443,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 32, // Extra padding at bottom for better scrolling
+    paddingBottom: 32,
   },
   statusCard: {
     flexDirection: 'row',
@@ -537,6 +567,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 8,
   },
   thresholdButton: {
     backgroundColor: '#f0f0f0',
@@ -549,6 +580,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4A90E2',
     minWidth: 60,
+    textAlign: 'center',
+  },
+  thresholdInfo: {
+    fontSize: 12,
+    color: '#666',
     textAlign: 'center',
   },
   exerciseCard: {
@@ -641,7 +677,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 16, // Added margin for better spacing at bottom
+    marginBottom: 16,
   },
   tipsTitle: {
     fontSize: 16,

@@ -6,7 +6,7 @@ class WeightWebSocket {
     this.maxReconnectAttempts = 5;
     this.reconnectInterval = 3000;
     this.listeners = new Map();
-    this.raspberryPiIP = '192.168.1.100'; // IP deines Raspberry Pi
+    this.raspberryPiIP = '192.168.0.168'; // IP deines Raspberry Pi
     this.port = 8765;
   }
 
