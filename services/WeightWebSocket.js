@@ -72,31 +72,37 @@ class WeightWebSocket {
   }
 
   handleMessage(data) {
-    switch (data.type) {
-      case 'connection':
-        console.log('Verbindungsbestätigung:', data.message);
-        this.emit('connectionConfirmed', data);
-        break;
-        
-      case 'weight_data':
-        this.emit('weightData', {
-          weight: data.weight,
-          timestamp: data.timestamp
-        });
-        break;
-        
-      case 'response':
-        this.emit('commandResponse', data);
-        break;
-        
-      case 'error':
-        console.error('Server Fehler:', data.message);
-        this.emit('serverError', data);
-        break;
-        
-      default:
-        console.log('Unbekannter Nachrichtentyp:', data);
-    }
+  switch (data.type) {
+    case 'connection':
+      console.log('Verbindungsbestätigung:', data.message);
+      this.emit('connectionConfirmed', data);
+      break;
+      
+    case 'weight_data':
+      this.emit('weightData', {
+        waage1: data.waage1 || 0,
+        waage2: data.waage2 || 0,
+        drucksensoren: {
+          sensor1: data.drucksensoren?.sensor1 || 0,
+          sensor2: data.drucksensoren?.sensor2 || 0,
+          sensor3: data.drucksensoren?.sensor3 || 0
+        },
+        timestamp: data.timestamp
+      });
+      break;
+      
+    case 'response':
+      this.emit('commandResponse', data);
+      break;
+      
+    case 'error':
+      console.error('Server Fehler:', data.message);
+      this.emit('serverError', data);
+      break;
+      
+    default:
+      console.log('Unbekannter Nachrichtentyp:', data);
+  }
   }
 
   sendCommand(command, additionalData = {}) {

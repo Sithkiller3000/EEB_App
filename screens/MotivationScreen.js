@@ -14,54 +14,50 @@ import WeightWebSocket from '../services/WeightWebSocket';
 export default function MotivationScreen() {
   const [isExercising, setIsExercising] = useState(false);
   const [timer, setTimer] = useState(0);
-  const [currentWeight, setCurrentWeight] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('Getrennt');
   const [motivationMessage, setMotivationMessage] = useState('Bereit für deine Rehabilitation!');
   const [weightHistory, setWeightHistory] = useState([]);
-  const [sensorType, setSensorType] = useState('foot'); // 'hand' or 'foot'
-  const [leftFootWeight, setLeftFootWeight] = useState(0);
-  const [rightFootWeight, setRightFootWeight] = useState(0);
-  const [handWeight, setHandWeight] = useState(0);
+  
+  // Sensor states based on your data structure
+  const [waage1, setWaage1] = useState(0);
+  const [waage2, setWaage2] = useState(0);
+  const [handTopWeight, setHandTopWeight] = useState(0);    // drucksensoren.sensor1
+  const [handFrontWeight, setHandFrontWeight] = useState(0); // drucksensoren.sensor2
+  const [handBackWeight, setHandBackWeight] = useState(0);   // drucksensoren.sensor3
+  
+  // Thresholds
+  const [weightThreshold, setWeightThreshold] = useState(0.05); // Grenzwert für Drucksensoren
   
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef(null);
 
-  // Motivational messages for hand exercises (should be low weight)
-  const handMotivationalMessages = [
-    "Entspanne deine Hand! Weniger Druck ist besser!",
-    "Perfekt! Halte deine Hand locker und entspannt!",
-    "Sanfte Berührung - genau richtig für die Heilung!",
-    "Großartig! Minimaler Druck fördert die Durchblutung!",
-    "Leichte Berührung - deine Hand erholt sich optimal!",
-    "Entspannt bleiben! Zu viel Druck kann schaden!",
-    "Wunderbar! Diese sanfte Haltung unterstützt die Heilung!"
+  // Motivational messages for correct hand positioning
+  const correctPositionMessages = [
+    "Perfekt! Arbeite aus den Beinen, nicht mit der Hand!",
+    "Großartig! Deine Hand ist entspannt - genau richtig!",
+    "Exzellent! Du nutzt die richtige Technik!",
+    "Wunderbar! Halte diese entspannte Handhaltung!",
+    "Fantastisch! Die Kraft kommt aus den Beinen!",
+    "Optimal! Deine Hand führt nur, die Beine arbeiten!"
   ];
 
-  // Motivational messages for foot exercises (should be equal weight distribution)
-  const footMotivationalMessages = [
-    "Perfekte Balance! Beide Füße tragen gleichmäßig!",
-    "Ausgezeichnet! Deine Gewichtsverteilung ist optimal!",
-    "Großartig! Du stehst stabil und ausgeglichen!",
-    "Fantastisch! Beide Beine arbeiten gleichmäßig zusammen!",
-    "Perfekte Haltung! Das Gewicht ist ideal verteilt!",
-    "Wunderbar! Deine Balance wird immer besser!",
-    "Exzellent! Du trägst dein Gewicht gleichmäßig auf beiden Füßen!"
+  // Warning messages for incorrect positioning
+  const pullUpWarningMessages = [
+    "Nicht hochziehen, aus den Beinen arbeiten!",
+    "Entspanne deine Hand! Die Kraft soll aus den Beinen kommen!",
+    "Weniger Zug mit der Hand - mehr Druck mit den Beinen!",
+    "Achtung! Zu viel Kraft in der Hand - arbeite aus den Beinen!"
   ];
 
-  // Warning messages for incorrect posture
-  const warningMessages = {
-    hand: [
-      "Vorsicht! Zu viel Druck auf die verletzte Hand!",
-      "Entspanne deine Hand - weniger Belastung ist besser!",
-      "Achtung! Reduziere den Druck für optimale Heilung!"
-    ],
-    foot: [
-      "Ungleiche Gewichtsverteilung! Versuche beide Füße gleichmäßig zu belasten!",
-      "Zu wenig Gewicht! Versuche mehr auf beide Füße zu stützen!",
-      "Einseitige Belastung erkannt! Verteile dein Gewicht gleichmäßiger!"
-    ]
-  };
+  // Encouragement messages when all sensors are above threshold
+  const encouragementMessages = [
+    "Du schaffst das! Versuch, deine Hand zu entspannen.",
+    "Komm, noch {seconds} Sekunden! Du packst das!",
+    "Stark! Aber entspanne deine Hand dabei!",
+    "Durchhalten! Weniger Hand, mehr Beine!",
+    "Fast geschafft! Hand locker lassen!"
+  ];
 
   useEffect(() => {
     initializeWebSocket();
@@ -80,9 +76,9 @@ export default function MotivationScreen() {
       timerRef.current = setInterval(() => {
         setTimer(prev => {
           const newTimer = prev + 1;
-          // Motivationsnachricht alle 15 Sekunden ändern basierend auf Sensortyp
-          if (newTimer % 15 === 0) {
-            updateMotivationMessage();
+          // Update motivation message every 3 seconds during exercise
+          if (newTimer % 3 === 0) {
+            updateMotivationMessage(newTimer);
           }
           return newTimer;
         });
@@ -99,40 +95,30 @@ export default function MotivationScreen() {
         clearInterval(timerRef.current);
       }
     };
-  }, [isExercising, sensorType, leftFootWeight, rightFootWeight, handWeight]);
+  }, [isExercising, handTopWeight, handFrontWeight, handBackWeight]);
 
-  const updateMotivationMessage = () => {
-    if (sensorType === 'hand') {
-      // Hand exercises: lower weight is better
-      if (handWeight < 2) {
-        const randomMessage = handMotivationalMessages[
-          Math.floor(Math.random() * handMotivationalMessages.length)
-        ];
-        setMotivationMessage(randomMessage);
-      } else {
-        const randomWarning = warningMessages.hand[
-          Math.floor(Math.random() * warningMessages.hand.length)
-        ];
-        setMotivationMessage(randomWarning);
-      }
-    } else {
-      // Foot exercises: equal weight distribution is better
-      const totalWeight = leftFootWeight + rightFootWeight;
-      const weightDifference = Math.abs(leftFootWeight - rightFootWeight);
-      
-      if (totalWeight > 30 && weightDifference < 5) {
-        // Good weight distribution
-        const randomMessage = footMotivationalMessages[
-          Math.floor(Math.random() * footMotivationalMessages.length)
-        ];
-        setMotivationMessage(randomMessage);
-      } else {
-        // Poor weight distribution or too little weight
-        const randomWarning = warningMessages.foot[
-          Math.floor(Math.random() * warningMessages.foot.length)
-        ];
-        setMotivationMessage(randomWarning);
-      }
+  const updateMotivationMessage = (currentTimer) => {
+    // Logic: Hand_oben > Hand_vorne && Hand_hinten -> warning about pulling up
+    if (handTopWeight > handFrontWeight && handTopWeight > handBackWeight) {
+      const randomWarning = pullUpWarningMessages[
+        Math.floor(Math.random() * pullUpWarningMessages.length)
+      ];
+      setMotivationMessage(randomWarning);
+    }
+    // Logic: All sensors above threshold -> encouragement with time remaining
+    else if (handTopWeight > weightThreshold && handFrontWeight > weightThreshold && handBackWeight > weightThreshold) {
+      const remainingSeconds = Math.max(0, 60 - (currentTimer % 60)); // Example: 60 second intervals
+      const randomEncouragement = encouragementMessages[
+        Math.floor(Math.random() * encouragementMessages.length)
+      ].replace('{seconds}', remainingSeconds.toString());
+      setMotivationMessage(randomEncouragement);
+    }
+    // Correct positioning - low hand forces
+    else {
+      const randomCorrect = correctPositionMessages[
+        Math.floor(Math.random() * correctPositionMessages.length)
+      ];
+      setMotivationMessage(randomCorrect);
     }
   };
 
@@ -154,28 +140,22 @@ export default function MotivationScreen() {
   const handleWebSocketConnected = () => {
     setIsConnected(true);
     setConnectionStatus('Verbunden');
-    setMotivationMessage('Gewichtssensor erfolgreich verbunden!');
+    setMotivationMessage('Sensoren erfolgreich verbunden!');
   };
 
   const handleWebSocketDisconnected = () => {
     setIsConnected(false);
     setConnectionStatus('Getrennt');
-    setMotivationMessage('Verbindung zum Gewichtssensor verloren...');
+    setMotivationMessage('Verbindung zu den Sensoren verloren...');
   };
 
   const handleWeightData = (data) => {
-    setCurrentWeight(data.weight);
-    
-    // Simulate different sensor inputs based on sensor type
-    // In real implementation, you would receive data for different sensors
-    if (sensorType === 'hand') {
-      setHandWeight(data.weight);
-    } else {
-      // For foot sensors, simulate left and right foot weights
-      // In real implementation, you would receive separate sensor data
-      setLeftFootWeight(data.weight * 0.5 + (Math.random() - 0.5) * 5);
-      setRightFootWeight(data.weight * 0.5 + (Math.random() - 0.5) * 5);
-    }
+    // Update sensor values based on your data structure
+    setWaage1(data.waage1 || 0);
+    setWaage2(data.waage2 || 0);
+    setHandTopWeight(data.drucksensoren?.sensor1 || 0);
+    setHandFrontWeight(data.drucksensoren?.sensor2 || 0);
+    setHandBackWeight(data.drucksensoren?.sensor3 || 0);
     
     setWeightHistory(prev => {
       const newHistory = [...prev, data];
@@ -184,7 +164,7 @@ export default function MotivationScreen() {
     
     // Real-time feedback during exercise
     if (isExercising) {
-      updateMotivationMessage();
+      updateMotivationMessage(timer);
     }
   };
 
@@ -212,7 +192,7 @@ export default function MotivationScreen() {
 
   const startExercise = async () => {
     if (!isConnected) {
-      Alert.alert('Verbindungsfehler', 'Kann nicht mit dem Gewichtssensor verbinden. Bitte überprüfe deine Raspberry Pi Verbindung.');
+      Alert.alert('Verbindungsfehler', 'Kann nicht mit den Sensoren verbinden. Bitte überprüfe deine Raspberry Pi Verbindung.');
       return;
     }
 
@@ -220,12 +200,7 @@ export default function MotivationScreen() {
       await WeightWebSocket.startMeasuring();
       setIsExercising(true);
       setTimer(0);
-      
-      if (sensorType === 'hand') {
-        setMotivationMessage("Hand-Übung gestartet! Halte deine Hand entspannt und locker!");
-      } else {
-        setMotivationMessage("Fuß-Übung gestartet! Stelle dich auf beide Sensoren und verteile dein Gewicht gleichmäßig!");
-      }
+      setMotivationMessage("Übung gestartet! Greife den Griff und arbeite aus den Beinen!");
     } catch (error) {
       Alert.alert('Fehler', `Messung konnte nicht gestartet werden: ${error.message}`);
     }
@@ -244,9 +219,9 @@ export default function MotivationScreen() {
   const tareScale = async () => {
     try {
       await WeightWebSocket.tareScale();
-      Alert.alert('Erfolg', 'Waage wurde genullt');
+      Alert.alert('Erfolg', 'Sensoren wurden genullt');
     } catch (error) {
-      Alert.alert('Fehler', `Waage konnte nicht genullt werden: ${error.message}`);
+      Alert.alert('Fehler', `Sensoren konnten nicht genullt werden: ${error.message}`);
     }
   };
 
@@ -268,44 +243,27 @@ export default function MotivationScreen() {
     return 'time';
   };
 
-  const getSensorStatusColor = () => {
-    if (sensorType === 'hand') {
-      return handWeight < 2 ? '#4CAF50' : '#E74C3C';
-    } else {
-      const weightDifference = Math.abs(leftFootWeight - rightFootWeight);
-      const totalWeight = leftFootWeight + rightFootWeight;
-      return (totalWeight > 30 && weightDifference < 5) ? '#4CAF50' : '#FF9800';
-    }
+  const getSensorColor = (weight) => {
+    if (weight > weightThreshold) return '#E74C3C'; // Red for high force
+    if (weight > weightThreshold * 0.5) return '#FF9800'; // Orange for medium force
+    return '#4CAF50'; // Green for low force
   };
+
+  const getOverallStatus = () => {
+    if (handTopWeight > handFrontWeight && handTopWeight > handBackWeight) {
+      return { color: '#E74C3C', text: '⚠ Zu viel Zug nach oben!' };
+    }
+    if (handTopWeight > weightThreshold && handFrontWeight > weightThreshold && handBackWeight > weightThreshold) {
+      return { color: '#FF9800', text: '💪 Hohe Belastung - entspannen!' };
+    }
+    return { color: '#4CAF50', text: '✓ Optimale Handhaltung' };
+  };
+
+  const overallStatus = getOverallStatus();
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        {/* Sensor Type Selection */}
-        <View style={styles.sensorTypeCard}>
-          <Text style={styles.sensorTypeTitle}>Sensor-Typ auswählen</Text>
-          <View style={styles.sensorTypeButtons}>
-            <TouchableOpacity 
-              style={[styles.sensorTypeButton, sensorType === 'hand' && styles.activeSensorType]}
-              onPress={() => setSensorType('hand')}
-            >
-              <Ionicons name="hand-left" size={20} color={sensorType === 'hand' ? 'white' : '#4A90E2'} />
-              <Text style={[styles.sensorTypeText, sensorType === 'hand' && styles.activeSensorTypeText]}>
-                Hand
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.sensorTypeButton, sensorType === 'foot' && styles.activeSensorType]}
-              onPress={() => setSensorType('foot')}
-            >
-              <Ionicons name="footsteps" size={20} color={sensorType === 'foot' ? 'white' : '#4A90E2'} />
-              <Text style={[styles.sensorTypeText, sensorType === 'foot' && styles.activeSensorTypeText]}>
-                Fuß
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Connection Status */}
         <View style={[styles.statusCard, { backgroundColor: `${getConnectionColor()}20` }]}>
           <Ionicons 
@@ -314,7 +272,7 @@ export default function MotivationScreen() {
             color={getConnectionColor()} 
           />
           <Text style={[styles.statusText, { color: getConnectionColor() }]}>
-            Gewichtssensor: {connectionStatus}
+            Sensoren: {connectionStatus}
           </Text>
           {!isConnected && (
             <TouchableOpacity 
@@ -326,39 +284,68 @@ export default function MotivationScreen() {
           )}
         </View>
 
-        {/* Weight Display */}
-        {sensorType === 'hand' ? (
-          <View style={styles.weightCard}>
-            <Text style={styles.weightTitle}>Hand-Sensor</Text>
-            <Text style={[styles.weightValue, { color: getSensorStatusColor() }]}>
-              {handWeight.toFixed(1)} kg
-            </Text>
-            <Text style={styles.weightSubtitle}>
-              {handWeight < 2 ? '✓ Optimal entspannt' : '⚠ Zu viel Druck'}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.weightCard}>
-            <Text style={styles.weightTitle}>Fuß-Sensoren</Text>
-            <View style={styles.footWeightContainer}>
-              <View style={styles.footWeight}>
-                <Text style={styles.footLabel}>Linker Fuß</Text>
-                <Text style={[styles.weightValue, { fontSize: 24 }]}>
-                  {leftFootWeight.toFixed(1)} kg
-                </Text>
-              </View>
-              <View style={styles.footWeight}>
-                <Text style={styles.footLabel}>Rechter Fuß</Text>
-                <Text style={[styles.weightValue, { fontSize: 24 }]}>
-                  {rightFootWeight.toFixed(1)} kg
-                </Text>
-              </View>
+        {/* Weight Scales Display */}
+        <View style={styles.scalesCard}>
+          <Text style={styles.scalesTitle}>Gewichts-Waagen</Text>
+          <View style={styles.scalesRow}>
+            <View style={styles.scaleItem}>
+              <Text style={styles.scaleLabel}>Waage 1</Text>
+              <Text style={styles.scaleValue}>{waage1.toFixed(1)} kg</Text>
             </View>
-            <Text style={[styles.weightSubtitle, { color: getSensorStatusColor() }]}>
-              Differenz: {Math.abs(leftFootWeight - rightFootWeight).toFixed(1)} kg
-            </Text>
+            <View style={styles.scaleItem}>
+              <Text style={styles.scaleLabel}>Waage 2</Text>
+              <Text style={styles.scaleValue}>{waage2.toFixed(1)} kg</Text>
+            </View>
           </View>
-        )}
+        </View>
+
+        {/* Hand Pressure Sensors Display */}
+        <View style={styles.sensorsCard}>
+          <Text style={styles.sensorsTitle}>Hand-Drucksensoren</Text>
+          <View style={styles.sensorsGrid}>
+            <View style={styles.sensorItem}>
+              <Text style={styles.sensorLabel}>Oben</Text>
+              <Text style={[styles.sensorValue, { color: getSensorColor(handTopWeight) }]}>
+                {handTopWeight.toFixed(3)}
+              </Text>
+            </View>
+            <View style={styles.sensorItem}>
+              <Text style={styles.sensorLabel}>Vorne</Text>
+              <Text style={[styles.sensorValue, { color: getSensorColor(handFrontWeight) }]}>
+                {handFrontWeight.toFixed(3)}
+              </Text>
+            </View>
+            <View style={styles.sensorItem}>
+              <Text style={styles.sensorLabel}>Hinten</Text>
+              <Text style={[styles.sensorValue, { color: getSensorColor(handBackWeight) }]}>
+                {handBackWeight.toFixed(3)}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.overallStatus, { color: overallStatus.color }]}>
+            {overallStatus.text}
+          </Text>
+        </View>
+
+        {/* Threshold Setting */}
+        <View style={styles.thresholdCard}>
+          <Text style={styles.thresholdTitle}>Druckgrenzwert</Text>
+          <View style={styles.thresholdControls}>
+            <TouchableOpacity 
+              style={styles.thresholdButton}
+              onPress={() => setWeightThreshold(Math.max(0.01, weightThreshold - 0.01))}
+            >
+              <Ionicons name="remove" size={20} color="#4A90E2" />
+            </TouchableOpacity>
+            <Text style={styles.thresholdValue}>{weightThreshold.toFixed(3)}</Text>
+            <TouchableOpacity 
+              style={styles.thresholdButton}
+              onPress={() => setWeightThreshold(weightThreshold + 0.01)}
+            >
+              <Ionicons name="add" size={20} color="#4A90E2" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Exercise Timer */}
         <View style={styles.exerciseCard}>
@@ -384,9 +371,7 @@ export default function MotivationScreen() {
               disabled={!isConnected}
             >
               <Ionicons name="play" size={24} color="white" />
-              <Text style={styles.buttonText}>
-                {sensorType === 'hand' ? 'Hand-Übung starten' : 'Fuß-Übung starten'}
-              </Text>
+              <Text style={styles.buttonText}>Übung starten</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.stopButton} onPress={stopExercise}>
@@ -394,46 +379,34 @@ export default function MotivationScreen() {
               <Text style={styles.buttonText}>Session beenden</Text>
             </TouchableOpacity>
           )}
+          
+          <TouchableOpacity style={styles.tareButton} onPress={tareScale}>
+            <Ionicons name="refresh" size={20} color="#666" />
+            <Text style={styles.tareButtonText}>Sensoren nullen</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Exercise Tips */}
         <View style={styles.tipsCard}>
-          <Text style={styles.tipsTitle}>
-            💡 {sensorType === 'hand' ? 'Hand-Übungstipps' : 'Fuß-Übungstipps'}
-          </Text>
-          {sensorType === 'hand' ? (
-            <>
-              <Text style={styles.tipText}>• Halte deine Hand entspannt und locker</Text>
-              <Text style={styles.tipText}>• Minimaler Druck fördert die Heilung</Text>
-              <Text style={styles.tipText}>• Vermeide starke Belastung der verletzten Hand</Text>
-              <Text style={styles.tipText}>• Sanfte Berührung ist optimal</Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.tipText}>• Verteile dein Gewicht gleichmäßig auf beide Füße</Text>
-              <Text style={styles.tipText}>• Halte eine stabile, aufrechte Haltung</Text>
-              <Text style={styles.tipText}>• Nutze beide Beine gleichmäßig</Text>
-              <Text style={styles.tipText}>• Achte auf eine ausgewogene Balance</Text>
-            </>
-          )}
+          <Text style={styles.tipsTitle}>💡 Übungstipps</Text>
+          <Text style={styles.tipText}>• Greife den Griff locker, nicht verkrampft</Text>
+          <Text style={styles.tipText}>• Die Kraft soll aus den Beinen kommen</Text>
+          <Text style={styles.tipText}>• Vermeide das Hochziehen mit der Hand</Text>
+          <Text style={styles.tipText}>• Hand nur zur Führung nutzen</Text>
+          <Text style={styles.tipText}>• Bei Schmerzen sofort aufhören</Text>
         </View>
       </View>
     </SafeAreaView>
   );
 }
 
+// Styles remain the same as before, but add these new ones:
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  sensorTypeCard: {
+  // ... (all previous styles remain the same)
+  
+  scalesCard: {
     backgroundColor: 'white',
-    padding: 16,
+    padding: 20,
     borderRadius: 12,
     marginBottom: 16,
     shadowColor: '#000',
@@ -442,37 +415,39 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  sensorTypeTitle: {
+  scalesTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 16,
+    textAlign: 'center',
     color: '#333',
   },
-  sensorTypeButtons: {
+  scalesRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
-  sensorTypeButton: {
-    flexDirection: 'row',
+  scaleItem: {
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#4A90E2',
-    backgroundColor: 'white',
   },
-  activeSensorType: {
-    backgroundColor: '#4A90E2',
+  scaleLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
   },
-  sensorTypeText: {
-    marginLeft: 8,
-    fontSize: 16,
+  scaleValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#4A90E2',
-    fontWeight: '600',
   },
-  activeSensorTypeText: {
-    color: 'white',
+  
+  // ... (rest of the styles from the previous implementation)
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
   },
   statusCard: {
     flexDirection: 'row',
@@ -498,47 +473,82 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '600',
   },
-  weightCard: {
+  sensorsCard: {
     backgroundColor: 'white',
     padding: 20,
     borderRadius: 12,
     marginBottom: 16,
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  weightTitle: {
+  sensorsTitle: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  weightValue: {
-    fontSize: 32,
     fontWeight: 'bold',
-    color: '#4A90E2',
-    marginBottom: 8,
-  },
-  weightSubtitle: {
-    fontSize: 14,
-    color: '#666',
+    marginBottom: 16,
     textAlign: 'center',
+    color: '#333',
   },
-  footWeightContainer: {
+  sensorsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    width: '100%',
     marginBottom: 12,
   },
-  footWeight: {
+  sensorItem: {
     alignItems: 'center',
   },
-  footLabel: {
-    fontSize: 14,
+  sensorLabel: {
+    fontSize: 12,
     color: '#666',
     marginBottom: 4,
+  },
+  sensorValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  overallStatus: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  thresholdCard: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  thresholdTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+    color: '#333',
+  },
+  thresholdControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thresholdButton: {
+    backgroundColor: '#f0f0f0',
+    padding: 8,
+    borderRadius: 6,
+    marginHorizontal: 12,
+  },
+  thresholdValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4A90E2',
+    minWidth: 80,
+    textAlign: 'center',
   },
   exerciseCard: {
     backgroundColor: 'white',
@@ -593,6 +603,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
+    marginBottom: 8,
   },
   stopButton: {
     backgroundColor: '#E74C3C',
@@ -601,6 +612,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
+    marginBottom: 8,
   },
   disabledButton: {
     backgroundColor: '#ccc',
@@ -610,6 +622,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  tareButton: {
+    backgroundColor: '#f0f0f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+  },
+  tareButtonText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 4,
   },
   tipsCard: {
     backgroundColor: 'white',
