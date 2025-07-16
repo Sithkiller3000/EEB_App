@@ -4,20 +4,21 @@ class WeightWebSocket {
     this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.reconnectInterval = 3000;
+    this.reconnectInterval = 3000; // 3 seconds between reconnect attempts
     this.listeners = new Map();
-    this.raspberryPiIP = '192.168.0.168'; // IP deines Raspberry Pi
+    this.raspberryPiIP = '192.168.0.168'; // Raspberry Pi IP address
     this.port = 8765;
   }
 
+  // Establishes WebSocket connection to Raspberry Pi
   connect() {
     return new Promise((resolve, reject) => {
       try {
         const wsUrl = `ws://${this.raspberryPiIP}:${this.port}`;
         console.log(`Verbinde zu WebSocket: ${wsUrl}`);
-        
+
         this.ws = new WebSocket(wsUrl);
-        
+
         this.ws.onopen = () => {
           console.log('WebSocket verbunden');
           this.isConnected = true;
@@ -25,7 +26,7 @@ class WeightWebSocket {
           this.emit('connected');
           resolve();
         };
-        
+
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
@@ -34,13 +35,13 @@ class WeightWebSocket {
             console.error('Fehler beim Parsen der WebSocket-Nachricht:', error);
           }
         };
-        
+
         this.ws.onclose = (event) => {
           console.log('WebSocket Verbindung geschlossen:', event.code, event.reason);
           this.isConnected = false;
           this.emit('disconnected');
-          
-          // Automatische Wiederverbindung
+
+          // Auto-reconnect logic with attempt limit
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
             setTimeout(() => {
               this.reconnectAttempts++;
@@ -49,13 +50,13 @@ class WeightWebSocket {
             }, this.reconnectInterval);
           }
         };
-        
+
         this.ws.onerror = (error) => {
           console.error('WebSocket Fehler:', error);
           this.emit('error', error);
           reject(error);
         };
-        
+
       } catch (error) {
         console.error('Fehler beim Erstellen der WebSocket-Verbindung:', error);
         reject(error);
@@ -63,6 +64,7 @@ class WeightWebSocket {
     });
   }
 
+  // Cleanly closes WebSocket connection
   disconnect() {
     if (this.ws) {
       this.ws.close();
@@ -71,40 +73,49 @@ class WeightWebSocket {
     }
   }
 
+  // Routes incoming messages based on type
   handleMessage(data) {
-  switch (data.type) {
-    case 'connection':
-      console.log('Verbindungsbestätigung:', data.message);
-      this.emit('connectionConfirmed', data);
-      break;
-      
-    case 'weight_data':
-      this.emit('weightData', {
-        waage1: data.waage1 || 0,
-        waage2: data.waage2 || 0,
-        drucksensoren: {
-          sensor1: data.drucksensoren?.sensor1 || 0,
-          sensor2: data.drucksensoren?.sensor2 || 0,
-          sensor3: data.drucksensoren?.sensor3 || 0
-        },
-        timestamp: data.timestamp
-      });
-      break;
-      
-    case 'response':
-      this.emit('commandResponse', data);
-      break;
-      
-    case 'error':
-      console.error('Server Fehler:', data.message);
-      this.emit('serverError', data);
-      break;
-      
-    default:
-      console.log('Unbekannter Nachrichtentyp:', data);
-  }
+    switch (data.type) {
+      case 'connection':
+        console.log('Verbindungsbestätigung:', data.message);
+        this.emit('connectionConfirmed', data);
+        break;
+
+      case 'weight_data':
+        // Process weight data from scale and pressure sensors
+        this.emit('weightData', {
+          waage2: data.waage2 || 0,
+          drucksensoren: {
+            sensor1: data.drucksensoren?.sensor1 || 0,
+            sensor2: data.drucksensoren?.sensor2 || 0,
+            sensor3: data.drucksensoren?.sensor3 || 0,
+          },
+          timestamp: data.timestamp,
+        });
+        break;
+
+      case 'response':
+        this.emit('commandResponse', data);
+        break;
+
+      case 'error':
+        console.error('Server Fehler:', data.message);
+        this.emit('serverError', data);
+        break;
+
+      default:
+        console.log('Unbekannter Nachrichtentyp:', data);
+    }
   }
 
+  // Calibrates scale with known reference weight
+  async calibrateWithWeight(knownWeight) {
+    return await this.sendCommand('calibrate_scale', {
+      known_weight: knownWeight
+    });
+  }
+
+  // Sends command to server and waits for response
   sendCommand(command, additionalData = {}) {
     return new Promise((resolve, reject) => {
       if (!this.isConnected || !this.ws) {
@@ -120,8 +131,8 @@ class WeightWebSocket {
 
       try {
         this.ws.send(JSON.stringify(message));
-        
-        // Auf Antwort warten
+
+        // Set up response handler with matching command
         const responseHandler = (response) => {
           if (response.command === command) {
             this.off('commandResponse', responseHandler);
@@ -132,22 +143,22 @@ class WeightWebSocket {
             }
           }
         };
-        
+
         this.on('commandResponse', responseHandler);
-        
-        // Timeout nach 5 Sekunden
+
+        // Timeout after 50 seconds
         setTimeout(() => {
           this.off('commandResponse', responseHandler);
           reject(new Error('Timeout: Keine Antwort vom Server'));
-        }, 5000);
-        
+        }, 50000);
+
       } catch (error) {
         reject(error);
       }
     });
   }
 
-  // Event-System
+  // Event system implementation
   on(event, callback) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
@@ -177,7 +188,7 @@ class WeightWebSocket {
     }
   }
 
-  // Convenience-Methoden
+  // Convenience methods for common commands
   async startMeasuring() {
     return await this.sendCommand('start_measuring');
   }
@@ -186,18 +197,31 @@ class WeightWebSocket {
     return await this.sendCommand('stop_measuring');
   }
 
+  async initScale(knownWeight) {
+    return await this.sendCommand('init', {
+      known_weight: knownWeight
+    });
+  }
+
+  async triggerZero() {
+    return await this.sendCommand('start_zero_measurement');
+  }
+
   async tareScale() {
     return await this.sendCommand('tare_scale');
+  }
+
+  async calibrateScale(knownWeight) {
+    return await this.sendCommand('calibrate_scale', {
+      known_weight: knownWeight
+    });
   }
 
   async getCurrentWeight() {
     return await this.sendCommand('get_current_weight');
   }
 
-  async getWeightHistory(limit = 50) {
-    return await this.sendCommand('get_history', { limit });
-  }
-
+  // Returns current connection status
   getConnectionStatus() {
     return {
       connected: this.isConnected,
@@ -207,4 +231,5 @@ class WeightWebSocket {
   }
 }
 
+// Export singleton instance
 export default new WeightWebSocket();

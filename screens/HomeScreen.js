@@ -1,72 +1,75 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  SafeAreaView 
+  SafeAreaView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
-        {/* Welcome Section */}
+        {/* Welcome section with greeting and motivational message */}
         <View style={styles.welcomeCard}>
-          <Text style={styles.welcomeText}>Welcome back!</Text>
-          <Text style={styles.subtitleText}>Ready for today's rehabilitation session?</Text>
+          <Text style={styles.welcomeText}>Willkommen zurück!</Text>
+          <Text style={styles.subtitleText}>Bereit für deine heutige Reha-Einheit?</Text>
         </View>
 
-        {/* Progress Overview */}
+        {/* Daily progress tracker showing completed exercises and active time */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Today's Progress</Text>
+          <Text style={styles.cardTitle}>Heutiger Fortschritt</Text>
           <View style={styles.progressRow}>
             <View style={styles.progressItem}>
               <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-              <Text style={styles.progressText}>3/5 Exercises</Text>
+              <Text style={styles.progressText}>3/5 Übungen</Text>
             </View>
             <View style={styles.progressItem}>
               <Ionicons name="time" size={24} color="#FF9800" />
-              <Text style={styles.progressText}>25 min active</Text>
+              <Text style={styles.progressText}>25 Min aktiv</Text>
             </View>
           </View>
         </View>
 
-        {/* Quick Actions */}
+        {/* Quick action buttons for common tasks */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Quick Actions</Text>
+          <Text style={styles.cardTitle}>Schnellaktionen</Text>
           <View style={styles.actionGrid}>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('Motivation')}
+            >
               <Ionicons name="play-circle" size={32} color="#4A90E2" />
-              <Text style={styles.actionText}>Start Exercise</Text>
+              <Text style={styles.actionText}>Übung starten</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton}>
               <Ionicons name="calendar" size={32} color="#4A90E2" />
-              <Text style={styles.actionText}>Schedule</Text>
+              <Text style={styles.actionText}>Planen</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton}>
               <Ionicons name="stats-chart" size={32} color="#4A90E2" />
-              <Text style={styles.actionText}>Progress</Text>
+              <Text style={styles.actionText}>Fortschritt</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton}>
               <Ionicons name="medical" size={32} color="#4A90E2" />
-              <Text style={styles.actionText}>Health Log</Text>
+              <Text style={styles.actionText}>Gesundheitslog</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Recent Activity */}
+        {/* Recent activity history */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Recent Activity</Text>
+          <Text style={styles.cardTitle}>Letzte Aktivitäten</Text>
           <View style={styles.activityItem}>
             <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-            <Text style={styles.activityText}>Completed arm stretches - 2 hours ago</Text>
+            <Text style={styles.activityText}>Armdehnungen abgeschlossen – vor 2 Std.</Text>
           </View>
           <View style={styles.activityItem}>
             <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-            <Text style={styles.activityText}>Finished balance exercises - Yesterday</Text>
+            <Text style={styles.activityText}>Balance-Übungen beendet – gestern</Text>
           </View>
         </View>
       </ScrollView>

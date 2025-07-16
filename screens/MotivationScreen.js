@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  StyleSheet,
   TouchableOpacity,
   SafeAreaView,
   Animated,
   Alert,
-  ScrollView
+  ScrollView,
+  Modal,
+  Button,
+  ActivityIndicator,
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import WeightWebSocket from '../services/WeightWebSocket';
@@ -19,22 +23,92 @@ export default function MotivationScreen() {
   const [connectionStatus, setConnectionStatus] = useState('Getrennt');
   const [motivationMessage, setMotivationMessage] = useState('Bereit für deine Rehabilitation!');
   const [weightHistory, setWeightHistory] = useState([]);
-  
+  const [showTipsModal, setShowTipsModal] = useState(true);
+  const [showCalibrationModal, setShowCalibrationModal] = useState(false);
+  const [knownWeight, setKnownWeight] = useState('');
+  const [calibrationStep, setCalibrationStep] = useState(1);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+
+
+
+
   // Sensor states based on your data structure
-  const [waage1, setWaage1] = useState(0);
+  //const [waage1, setWaage1] = useState(0);
   const [waage2, setWaage2] = useState(0);
+
+
   const [handTopWeight, setHandTopWeight] = useState(0);    // drucksensoren.sensor1
   const [handFrontWeight, setHandFrontWeight] = useState(0); // drucksensoren.sensor2
   const [handBackWeight, setHandBackWeight] = useState(0);   // drucksensoren.sensor3
-  
+
   // Thresholds - Erhöht auf 1.0 mit Minimum 1.0
   const [weightThreshold, setWeightThreshold] = useState(1.0);
-  
+
   // Faktor für Zug-Erkennung
   const pullUpFactor = 1.5;
-  
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef(null);
+
+  const handleStartPress = async () => {
+    if (!isConnected) return;
+
+    try {
+      await startZeroMeasurement(); // Zero-Messung auslösen
+      setShowCalibrationModal(true); // Modal öffnen
+    } catch (error) {
+      // Fehler wird schon in startZeroMeasurement gehandhabt
+    }
+  };
+
+  const startZeroMeasurement = async () => {
+    const res = WeightWebSocket.triggerZero();
+  }
+
+  const handleCalibrationConfirm = async () => {
+    if (!knownWeight) {
+      Alert.alert('Fehler', 'Bitte gib ein Referenzgewicht ein.');
+      return;
+    }
+
+    try {
+      setIsCalibrating(true);          // Ladeanzeige starten
+      await startExercise(knownWeight);
+      setShowCalibrationModal(false);  // Modal erst schließen, wenn fertig
+    } catch (error) {
+      Alert.alert('Fehler', `Kalibrierung fehlgeschlagen: ${error.message}`);
+    } finally {
+      setIsCalibrating(false);         // Ladeanzeige stoppen
+    }
+  };
+
+  const incorrectWeightDistributionMessages = [
+    "Deine Belastung ist einseitig – achte auf gleichmäßigen Druck.",
+    "Achte auf Balance – eine Seite ist deutlich stärker belastet.",
+    "Du verlagerst das Gewicht ungleich – bring Spannung auf beide Seiten.",
+    "Halte die Mitte – dein Druck ist nicht gleich verteilt.",
+    "Versuch, deine Kraft symmetrisch aufzuteilen.",
+    "Dein Körper ist aus dem Gleichgewicht – finde deine Mitte.",
+    "Eine Seite übernimmt die Arbeit – verteile das Gewicht gleichmäßig.",
+    "Unsaubere Verteilung – denk an Gleichgewicht und Kontrolle.",
+    "Balance halten – vermeide asymmetrische Belastung.",
+    "Mehr Gleichgewicht hilft dir, effizienter zu arbeiten."
+  ];
+
+  const balancedWeightDistributionMessages = [
+    "Sehr gut! Dein Druck ist wunderbar gleichmäßig verteilt.",
+    "Top! Deine Kraftverteilung ist perfekt ausbalanciert.",
+    "Klasse! Du arbeitest symmetrisch – genau so!",
+    "Stark! Deine Haltung ist stabil und ausgerichtet.",
+    "Super ausbalanciert! Beide Seiten arbeiten gleichmäßig.",
+    "Gleichgewicht gefunden – weiter so!",
+    "Optimale Balance! Du nutzt deinen Körper effizient.",
+    "Deine Körperspannung ist exakt im Lot – top!",
+    "So sieht kontrollierte Technik aus – ausgeglichen und stabil.",
+    "Deine Verteilung ist perfekt abgestimmt – starke Leistung!"
+  ];
+
+
 
   // Motivational messages for correct hand positioning
   const correctPositionMessages = [
@@ -63,13 +137,13 @@ export default function MotivationScreen() {
     "Fast geschafft! Hand locker lassen!"
   ];
 
-  // Rauschfilterung - Werte unter 1.0 als 0 anzeigen
-  const filterSensorValue = (value) => value >= 1.0 ? value : 0;
+  // Rauschfilterung - Werte unter 0.8 als 0 anzeigen
+  const filterSensorValue = (value) => value >= 0.8 ? value : 0;
 
   useEffect(() => {
     initializeWebSocket();
     startPulseAnimation();
-    
+
     return () => {
       WeightWebSocket.disconnect();
       if (timerRef.current) {
@@ -109,14 +183,22 @@ export default function MotivationScreen() {
     const filteredTop = filterSensorValue(handTopWeight);
     const filteredFront = filterSensorValue(handFrontWeight);
     const filteredBack = filterSensorValue(handBackWeight);
-    
+    const weightTolerance = 0.15; // 15 % Toleranz
+    const praiseTolerance = 0.05; // 5 % Toleranz
+
+    const minAllowed = knownWeight * (1 - weightTolerance);
+    const maxAllowed = knownWeight * (1 + weightTolerance);
+
+    const minPraise = knownWeight * (1 - praiseTolerance);
+    const maxPraise = knownWeight * (1 + praiseTolerance);
+
     // Verbesserte Zug-Logik: Alle Sensoren > Grenzwert UND Top > Faktor * (Front/Back)
-    if (filteredTop > weightThreshold && 
-        filteredFront > weightThreshold && 
-        filteredBack > weightThreshold &&
-        filteredTop > (pullUpFactor * filteredFront) && 
-        filteredTop > (pullUpFactor * filteredBack)) {
-      
+    if (filteredTop > weightThreshold &&
+      filteredFront > weightThreshold &&
+      filteredBack > weightThreshold &&
+      filteredTop > (pullUpFactor * filteredFront) &&
+      filteredTop > (pullUpFactor * filteredBack)) {
+
       const randomWarning = pullUpWarningMessages[
         Math.floor(Math.random() * pullUpWarningMessages.length)
       ];
@@ -130,6 +212,26 @@ export default function MotivationScreen() {
       ].replace('{seconds}', remainingSeconds.toString());
       setMotivationMessage(randomEncouragement);
     }
+
+
+
+    // Warnung bei deutlicher Abweichung
+    else if (waage2 < minAllowed || waage2 > maxAllowed) {
+      const randomWarning = incorrectWeightDistributionMessages[
+        Math.floor(Math.random() * incorrectWeightDistributionMessages.length)
+      ];
+      setMotivationMessage(randomWarning);
+      return;
+    }
+
+    // Lob bei sehr stabiler Haltung
+    else if (waage2 >= minPraise && waage2 <= maxPraise) {
+      const randomPraise = balancedWeightDistributionMessages[
+        Math.floor(Math.random() * balancedWeightDistributionMessages.length)
+      ];
+      setMotivationMessage(randomPraise);
+    }
+
     // Correct positioning - low hand forces
     else {
       const randomCorrect = correctPositionMessages[
@@ -145,9 +247,9 @@ export default function MotivationScreen() {
       WeightWebSocket.on('disconnected', handleWebSocketDisconnected);
       WeightWebSocket.on('weightData', handleWeightData);
       WeightWebSocket.on('serverError', handleServerError);
-      
+
       await WeightWebSocket.connect();
-      
+
     } catch (error) {
       console.error('WebSocket Initialisierung fehlgeschlagen:', error);
       setConnectionStatus('Verbindungsfehler');
@@ -168,17 +270,18 @@ export default function MotivationScreen() {
 
   const handleWeightData = (data) => {
     // Update sensor values based on your data structure
-    setWaage1(data.waage1 || 0);
+    //setWaage1(data.waage1 || 0);
+    console.log("Empfangene Daten:", data);
     setWaage2(data.waage2 || 0);
     setHandTopWeight(data.drucksensoren?.sensor1 || 0);
     setHandFrontWeight(data.drucksensoren?.sensor2 || 0);
     setHandBackWeight(data.drucksensoren?.sensor3 || 0);
-    
+
     setWeightHistory(prev => {
       const newHistory = [...prev, data];
       return newHistory.slice(-100);
     });
-    
+
     // Real-time feedback during exercise
     if (isExercising) {
       updateMotivationMessage(timer);
@@ -207,21 +310,27 @@ export default function MotivationScreen() {
     ).start();
   };
 
-  const startExercise = async () => {
+  const startExercise = async (knownWeight) => {
     if (!isConnected) {
-      Alert.alert('Verbindungsfehler', 'Kann nicht mit den Sensoren verbinden. Bitte überprüfe deine Raspberry Pi Verbindung.');
+      Alert.alert('Verbindungsfehler', 'Keine Verbindung zum Raspberry Pi.');
       return;
     }
 
     try {
+      // Hier: Gewicht an initScale übergeben
+      await WeightWebSocket.initScale(knownWeight);
+
+      // Dann Messung starten
       await WeightWebSocket.startMeasuring();
+
       setIsExercising(true);
       setTimer(0);
       setMotivationMessage("Übung gestartet! Greife den Griff und arbeite aus den Beinen!");
     } catch (error) {
-      Alert.alert('Fehler', `Messung konnte nicht gestartet werden: ${error.message}`);
+      throw error; // Weiterwerfen, damit das Modal nicht geschlossen wird
     }
   };
+
 
   const stopExercise = async () => {
     try {
@@ -271,13 +380,13 @@ export default function MotivationScreen() {
     const filteredTop = filterSensorValue(handTopWeight);
     const filteredFront = filterSensorValue(handFrontWeight);
     const filteredBack = filterSensorValue(handBackWeight);
-    
+
     // Verbesserte Zug-Erkennung
-    if (filteredTop > weightThreshold && 
-        filteredFront > weightThreshold && 
-        filteredBack > weightThreshold &&
-        filteredTop > (pullUpFactor * filteredFront) && 
-        filteredTop > (pullUpFactor * filteredBack)) {
+    if (filteredTop > weightThreshold &&
+      filteredFront > weightThreshold &&
+      filteredBack > weightThreshold &&
+      filteredTop > (pullUpFactor * filteredFront) &&
+      filteredTop > (pullUpFactor * filteredBack)) {
       return { color: '#E74C3C', text: '⚠ Zu viel Zug nach oben!' };
     }
     if (filteredTop > weightThreshold && filteredFront > weightThreshold && filteredBack > weightThreshold) {
@@ -292,36 +401,76 @@ export default function MotivationScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Connection Status */}
+          {/* Connection Status 
           <View style={[styles.statusCard, { backgroundColor: `${getConnectionColor()}20` }]}>
-            <Ionicons 
-              name={getConnectionIcon()} 
-              size={20} 
-              color={getConnectionColor()} 
+            <Ionicons
+              name={getConnectionIcon()}
+              size={20}
+              color={getConnectionColor()}
             />
             <Text style={[styles.statusText, { color: getConnectionColor() }]}>
               Sensoren: {connectionStatus}
             </Text>
             {!isConnected && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.reconnectButton}
                 onPress={initializeWebSocket}
               >
                 <Text style={styles.reconnectText}>Neu verbinden</Text>
               </TouchableOpacity>
             )}
+          </View>*/}
+
+          {/* Motivation Area */}
+          <Animated.View style={[styles.motivationCard, { transform: [{ scale: pulseAnim }] }]}>
+            <Ionicons name="heart" size={32} color="#E74C3C" />
+            <Text style={styles.motivationText}>{motivationMessage}</Text>
+          </Animated.View>
+
+          {/* Exercise Timer */}
+          <View style={styles.exerciseCard}>
+            <Text style={styles.exerciseTitle}>Übungszeit</Text>
+            <View style={styles.timerContainer}>
+              <Ionicons name="time" size={24} color="#4A90E2" />
+              <Text style={styles.timerText}>{formatTime(timer)}</Text>
+            </View>
+          </View>
+
+
+          {/* Control Buttons */}
+          <View style={styles.controlsContainer}>
+            {!isExercising ? (
+              <TouchableOpacity
+                style={[styles.startButton, !isConnected && styles.disabledButton]}
+                onPress={handleStartPress}
+                disabled={!isConnected}
+              >
+                <Ionicons name="play" size={24} color="white" />
+                <Text style={styles.buttonText}>Übung starten</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.stopButton} onPress={stopExercise}>
+                <Ionicons name="stop" size={24} color="white" />
+                <Text style={styles.buttonText}>Session beenden</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.tareButton} onPress={tareScale}>
+              <Ionicons name="refresh" size={20} color="#666" />
+              <Text style={styles.tareButtonText}>Sensoren nullen</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Weight Scales Display */}
           <View style={styles.scalesCard}>
             <Text style={styles.scalesTitle}>Gewichts-Waagen</Text>
             <View style={styles.scalesRow}>
-              <View style={styles.scaleItem}>
+              {/*<View style={styles.scaleItem}>
                 <Text style={styles.scaleLabel}>Waage 1</Text>
                 <Text style={styles.scaleValue}>{waage1.toFixed(1)} kg</Text>
-              </View>
+              </View>*/}
               <View style={styles.scaleItem}>
-                <Text style={styles.scaleLabel}>Waage 2</Text>
+                <Text style={styles.scaleLabel}>Waage 1</Text>
                 <Text style={styles.scaleValue}>{waage2.toFixed(1)} kg</Text>
               </View>
             </View>
@@ -359,14 +508,14 @@ export default function MotivationScreen() {
           <View style={styles.thresholdCard}>
             <Text style={styles.thresholdTitle}>Druckgrenzwert</Text>
             <View style={styles.thresholdControls}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.thresholdButton}
                 onPress={() => setWeightThreshold(Math.max(1.0, weightThreshold - 0.1))}
               >
                 <Ionicons name="remove" size={20} color="#4A90E2" />
               </TouchableOpacity>
               <Text style={styles.thresholdValue}>{weightThreshold.toFixed(1)}</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.thresholdButton}
                 onPress={() => setWeightThreshold(weightThreshold + 0.1)}
               >
@@ -378,55 +527,61 @@ export default function MotivationScreen() {
             </Text>
           </View>
 
-          {/* Exercise Timer */}
-          <View style={styles.exerciseCard}>
-            <Text style={styles.exerciseTitle}>Übungszeit</Text>
-            <View style={styles.timerContainer}>
-              <Ionicons name="time" size={24} color="#4A90E2" />
-              <Text style={styles.timerText}>{formatTime(timer)}</Text>
-            </View>
-          </View>
-
-          {/* Motivation Area */}
-          <Animated.View style={[styles.motivationCard, { transform: [{ scale: pulseAnim }] }]}>
-            <Ionicons name="heart" size={32} color="#E74C3C" />
-            <Text style={styles.motivationText}>{motivationMessage}</Text>
-          </Animated.View>
-
-          {/* Control Buttons */}
-          <View style={styles.controlsContainer}>
-            {!isExercising ? (
-              <TouchableOpacity 
-                style={[styles.startButton, !isConnected && styles.disabledButton]} 
-                onPress={startExercise}
-                disabled={!isConnected}
-              >
-                <Ionicons name="play" size={24} color="white" />
-                <Text style={styles.buttonText}>Übung starten</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={styles.stopButton} onPress={stopExercise}>
-                <Ionicons name="stop" size={24} color="white" />
-                <Text style={styles.buttonText}>Session beenden</Text>
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity style={styles.tareButton} onPress={tareScale}>
-              <Ionicons name="refresh" size={20} color="#666" />
-              <Text style={styles.tareButtonText}>Sensoren nullen</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* Exercise Tips */}
-          <View style={styles.tipsCard}>
-            <Text style={styles.tipsTitle}>💡 Übungstipps</Text>
-            <Text style={styles.tipText}>• Greife den Griff locker, nicht verkrampft</Text>
-            <Text style={styles.tipText}>• Die Kraft soll aus den Beinen kommen</Text>
-            <Text style={styles.tipText}>• Vermeide das Hochziehen mit der Hand</Text>
-            <Text style={styles.tipText}>• Hand nur zur Führung nutzen</Text>
-            <Text style={styles.tipText}>• Werte unter 1.0 werden als Rauschen gefiltert</Text>
-            <Text style={styles.tipText}>• Bei Schmerzen sofort aufhören</Text>
-          </View>
+          <Modal visible={showTipsModal} transparent animationType="fade">
+            <View style={modalStyles.overlay}>
+              <View style={modalStyles.modalBox}>
+                <Text style={styles.tipsTitle}>💡 Übungstipps</Text>
+                <Text style={styles.tipText}>• Greife den Griff locker, nicht verkrampft</Text>
+                <Text style={styles.tipText}>• Die Kraft soll aus den Beinen kommen</Text>
+                <Text style={styles.tipText}>• Vermeide das Hochziehen mit der Hand</Text>
+                <Text style={styles.tipText}>• Hand nur zur Führung nutzen</Text>
+                <Text style={styles.tipText}>• Werte unter 1.0 werden als Rauschen gefiltert</Text>
+                <Text style={styles.tipText}>• Bei Schmerzen sofort aufhören</Text>
+
+                <TouchableOpacity
+                  style={styles.tareButton}
+                  onPress={() => setShowTipsModal(false)}
+                >
+                  <Text style={styles.tareButtonText}>Verstanden</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/*Kalibrierungs-Pop-Up*/}
+          <Modal visible={showCalibrationModal} transparent animationType="slide">
+            <View style={modalStyles.overlay}>
+              <View style={modalStyles.modalBox}>
+                {isCalibrating ? (
+                  <ActivityIndicator size="large" color="#0000ff" />
+                ) : (
+                  <>
+                    {calibrationStep === 1 && (
+                      <>
+                        <Text style={styles.modalTitle}>Kalibrierung</Text>
+                        <Text style={styles.modalText}>Bitte lege jetzt ein Referenzgewicht auf und drücke "Weiter".</Text>
+                        <Button title="Weiter" onPress={() => setCalibrationStep(2)} />
+                      </>
+                    )}
+                    {calibrationStep === 2 && (
+                      <>
+                        <Text style={styles.modalTitle}>Referenzgewicht eingeben</Text>
+                        <TextInput
+                          style={modalStyles.input}
+                          placeholder="z.B. 1000"
+                          keyboardType="numeric"
+                          value={knownWeight}
+                          onChangeText={setKnownWeight}
+                        />
+                        <Button title="Kalibrieren" onPress={handleCalibrationConfirm} />
+                      </>
+                    )}
+                  </>
+                )}
+              </View>
+            </View>
+          </Modal>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -631,6 +786,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   controlsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 16,
   },
   startButton: {
@@ -689,5 +847,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
+  },
+});
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBox: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    width: '80%',
+  },
+  input: {
+    height: 40,
+    borderColor: 'gray',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    marginVertical: 10,
+    width: '100%',
   },
 });

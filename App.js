@@ -14,6 +14,7 @@ export default function App() {
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
+          // Dynamic tab icon based on route name and focus state
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
 
