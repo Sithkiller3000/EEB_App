@@ -41,10 +41,12 @@ scan the QR in the Terminal with your mobile phone camera
 Haken bei hostname: raspberrypi4 eintragen
 Haken bei Benutzername du Passwort festlegen, Benutzername und Passwort eintragen
 Haken bei Wifi einrichten, SSID: Wifi-Name eintragen, Passwort: Wifi-Passwort     eintragen
+
 5) Reiter Dienste:
     
 Haken bei SSH aktivieren
 Radiobutton bei Passwort zur Authentifizierung verwenden klicken
+
 6) Speichern
 7) In beiden Pop-Ups auf Ja
 8) SD-Karte wieder in Raspi einlegen
