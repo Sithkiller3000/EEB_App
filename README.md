@@ -30,6 +30,12 @@
 scan the QR in the Terminal with your mobile phone camera
 
 
+
+
+
+
+
+
 **Installation Guide for the Raspberry Pi and WebSocket**
 
 
