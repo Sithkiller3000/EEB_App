@@ -11,18 +11,18 @@
 
 *Clone the repository*
 
-git clone https://github.com/Sithkiller3000/EEB_App.git
-cd EEB_App
+    git clone https://github.com/Sithkiller3000/EEB_App.git
+    cd EEB_App
 
 
 *Install dependencies*
 
-npm install
+    npm install
 
 
 *Run the application*
 
-npm start
+    npm start
 
 
 *Connect your mobile phone*
